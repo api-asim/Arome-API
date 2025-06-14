@@ -18,7 +18,7 @@ require('dotenv').config();
 
 const PORT = process.env.PORT || 3000;
 
-app.use('/api/stripe/webhook', webhookRoutes);
+app.use('/api/stripe/webhook', webhookRoutes); 
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
     origin:'http://localhost:5173',
@@ -93,15 +93,15 @@ app.get('/api/auth' , (req , res)=>{
 
 
 mongoose.connect(process.env.DB_URL, {
-  serverSelectionTimeoutMS: 50000,
-  socketTimeoutMS: 45000,
+    serverSelectionTimeoutMS: 50000,
+    socketTimeoutMS: 45000,
 })
 .then(() => {
-  console.log('Database Connected Successfully!');
+    console.log('Database Connected Successfully!');
 })
 .catch((err) => {
-  console.log('Database Connection Failed...');
-  console.error(err);
+    console.log('Database Connection Failed...');
+    console.error(err);
 });
 
 app.listen(PORT , ()=>{
