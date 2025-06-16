@@ -73,8 +73,9 @@ app.use(express.json());
 
 app.use(cors({
     origin: process.env.VERCEL_LINK || 'http://localhost:5173',
-    credentials: true 
+    credentials: true,
 }));
+
 
 
 app.use((req, res, next) => {
