@@ -1,16 +1,18 @@
 // في ملف webhook.js
+
 const express = require('express');
 const Stripe = require('stripe');
 const { Order } = require('../models/order');
-require("dotenv").config();
+require("dotenv").config(); // تأكد أن هذا السطر موجود في بداية ملفك الرئيسي (مثل index.js أو server.js) لتحميل متغيرات البيئة
 
-// استخدم مفتاح Test الخاص بك هنا للتأكد إذا كنت تريد، أو اتركه يعتمد على .env
-const stripe = Stripe(process.env.STRIPE_KEY); // لا تغير هذا إذا كان STRIPE_KEY مضبوطًا في Vercel
+// هذا هو الشكل الصحيح: لا يوجد مفتاح سري هنا!
+const stripe = Stripe(process.env.STRIPE_KEY); // سيقرأ هذا المتغير من Vercel Environment Variables
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 const router = express.Router();
 
 const createOrder = async (data) => {
+    // ... (باقي كود دالة createOrder كما هو) ...
     let productsFromMetadata = [];
 
     try {
@@ -112,7 +114,6 @@ router.post('/', express.raw({type: 'application/json'}), async (req, res) => {
         console.log('Webhook event received (SIGNATURE VERIFICATION SKIPPED FOR DIAGNOSIS).');
 
     } catch (err) {
-        // إذا فشل الـ parse هنا، فهناك مشكلة في صيغة الـ body نفسه
         console.error(`Webhook Error during parsing (not signature): ${err.message}`);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
