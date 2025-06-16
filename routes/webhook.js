@@ -4,8 +4,8 @@ const Stripe = require('stripe');
 const { Order } = require('../models/order');
 require("dotenv").config();
 
-// استخدم مفتاح Test الخاص بك هنا للتأكد
-const stripe = Stripe(process.env.STRIPE_KEY || 'sk_test_51RZFD0RY03DkzGq64zcuH2MOYDDfIS1ryMJpCxxu00hgRlW6592XrNreMx9OEIfzmnzdn9EuyJZt1h9Y4USORcMF00z7AbHC3U'); // استخدم مفتاحك مباشرة للتأكد
+// استخدم مفتاح Test الخاص بك هنا للتأكد إذا كنت تريد، أو اتركه يعتمد على .env
+const stripe = Stripe(process.env.STRIPE_KEY); // لا تغير هذا إذا كان STRIPE_KEY مضبوطًا في Vercel
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 const router = express.Router();
@@ -95,7 +95,7 @@ const createOrder = async (data) => {
 
 // handler webhook
 router.post('/', express.raw({type: 'application/json'}), async (req, res) => {
-    // قم بتعليق السطر التالي:
+    // قم بتعليق هذا السطر
     // const sig = req.headers['stripe-signature'];
     let event;
 
@@ -107,11 +107,12 @@ router.post('/', express.raw({type: 'application/json'}), async (req, res) => {
         //     endpointSecret
         // );
 
-        // **استخدم هذا بدلاً منه للتجربة:**
+        // **استخدم هذا بدلاً منه للتجربة فقط:**
         event = JSON.parse(req.body.toString());
         console.log('Webhook event received (SIGNATURE VERIFICATION SKIPPED FOR DIAGNOSIS).');
 
     } catch (err) {
+        // إذا فشل الـ parse هنا، فهناك مشكلة في صيغة الـ body نفسه
         console.error(`Webhook Error during parsing (not signature): ${err.message}`);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
