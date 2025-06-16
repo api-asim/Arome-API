@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Stripe = require('stripe');
-const { Order } = require('../models/order');
+const { Order } = require('../../models/order');
 require('dotenv').config();
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY); 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
