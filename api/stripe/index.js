@@ -149,6 +149,7 @@ app.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
             console.error('Error in createOrder function called from webhook:', err.message);
         }
     } else {
+        //massage error
         console.log(`Unhandled event type: ${eventType}`);
     }
     res.status(200).end();
