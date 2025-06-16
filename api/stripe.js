@@ -1,19 +1,15 @@
-// api/stripe-webhook.js
 const express = require('express');
-const mongoose = require('mongoose'); 
+const mongoose = require('mongoose');
 const Stripe = require('stripe');
 const { Order } = require('../models/order');
 require('dotenv').config();
-
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY); 
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
-const app = express(); 
-
-
+const app = express();
 let cachedDb = null;
 
 async function connectToDatabase() {
+    
     if (cachedDb && cachedDb.connections[0].readyState === 1) {
         console.log('Using existing database connection for webhook');
         return cachedDb;
@@ -27,17 +23,17 @@ async function connectToDatabase() {
     try {
         console.log('Attempting new MongoDB connection for webhook...');
         const connection = await mongoose.connect(process.env.DB_URL, {
-            bufferCommands: false,
-            serverSelectionTimeoutMS: 15000,
-            socketTimeoutMS: 30000,
-            connectTimeoutMS: 30000,
+            bufferCommands: false, 
+            serverSelectionTimeoutMS: 15000, 
+            socketTimeoutMS: 30000, 
+            connectTimeoutMS: 30000, 
         });
-        cachedDb = connection;
+        cachedDb = connection; 
         console.log('New MongoDB connection established successfully for webhook.');
         return cachedDb;
     } catch (error) {
         console.error('MongoDB connection error for webhook:', error);
-        cachedDb = null;
+        cachedDb = null; 
         throw error;
     }
 }
@@ -53,10 +49,12 @@ const createOrder = async (data) => {
         });
 
         console.log('Stripe Line Items Response:', JSON.stringify(sessionLineItems, null, 2));
+
         if (!sessionLineItems || !Array.isArray(sessionLineItems.data) || sessionLineItems.data.length === 0) {
             console.error('No line items found for this session from Stripe.');
-            return;
+            return; 
         }
+
         productsFromMetadata = sessionLineItems.data.map(item => {
             if (!item.price) {
                 console.warn(`Line item ${item.id} is missing a price object.`);
@@ -85,6 +83,7 @@ const createOrder = async (data) => {
                 cartQuantity: item.quantity,
             };
         }).filter(item => item !== null);
+
         if (productsFromMetadata.length === 0) {
             console.error('No valid products found for order after processing Stripe line items.');
             return;
@@ -98,12 +97,12 @@ const createOrder = async (data) => {
     const subtotalInDollars = data.amount_subtotal / 100;
     const totalInDollars = data.amount_total / 100;
 
-
     const userId = data.metadata.userId;
     if (!userId) {
         console.error('Error: userId not found in session metadata for order creation.');
         return;
     }
+
     const newOrder = new Order({
         userId: userId,
         customerId: data.customer,
@@ -112,11 +111,9 @@ const createOrder = async (data) => {
         subtotal: subtotalInDollars,
         total: totalInDollars,
         shipping: data.customer_details,
-        delivery_status: 'pending',
+        delivery_status: 'pending', 
         payment_status: data.payment_status,
     });
-
-
     try {
         const savedOrder = await newOrder.save();
         console.log('Processed Order successfully and saved to DB:', savedOrder);
@@ -135,18 +132,18 @@ app.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
             sig,
             endpointSecret
         );
+        console.log('Stripe Webhook Event Type:', event.type); 
     } catch (err) {
-        console.error(`Webhook signature verification failed: ${err.message}`);
+        console.error(`Webhook signature verification failed: ${err.message}`); 
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    const data = event.data.object;
-    const eventType = event.type;
-
+    const data = event.data.object; 
+    const eventType = event.type;  
     if (eventType === 'checkout.session.completed') {
         try {
             console.log('Attempting to create order from checkout.session.completed event...');
-            await createOrder(data);
+            await createOrder(data); 
             console.log('createOrder function finished and likely saved data.');
         } catch (err) {
             console.error('Error in createOrder function called from webhook:', err.message);
@@ -154,9 +151,7 @@ app.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
     } else {
         console.log(`Unhandled event type: ${eventType}`);
     }
-
     res.status(200).end();
 });
-
 
 module.exports = app;

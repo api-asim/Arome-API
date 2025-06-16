@@ -7,10 +7,8 @@ const router = express.Router();
 
 router.post('/create-checkout-session', async (req, res) => {
     const {carts, userId} = req.body;
-    // const cartItems = req.body.carts; // هذا السطر غير ضروري لأنه `carts` هو نفسه `req.body.carts`
 
     console.log('Received userId from frontend in checkout.js:', userId);
-    // *** هذا هو السطر الجديد والمهم للتشخيص ***
     console.log('Received carts from frontend in checkout.js:', JSON.stringify(carts, null, 2));
 
 
@@ -21,7 +19,7 @@ router.post('/create-checkout-session', async (req, res) => {
     });
 
     if (!carts || !Array.isArray(carts) || carts.length === 0) {
-        console.error("Error: Cart items are missing or empty from frontend."); // إضافة log هنا
+        console.error("Error: Cart items are missing or empty from frontend."); 
         return res.status(400).json({ message: "Cart items are missing or empty." });
     }
 
@@ -31,7 +29,7 @@ router.post('/create-checkout-session', async (req, res) => {
         const itemName = item.title || item._id || `Unknown Item (Index: ${index})`;
 
         if (isNaN(price) || isNaN(quantity) || price <= 0 || quantity <= 0) {
-            console.error(`Error: Invalid price or quantity for item: ${itemName}. Price: ${price}, Quantity: ${quantity}`); // إضافة log هنا
+            console.error(`Error: Invalid price or quantity for item: ${itemName}. Price: ${price}, Quantity: ${quantity}`); 
             throw new Error(`Invalid price or quantity for item: ${itemName}`);
         }
 
@@ -104,7 +102,7 @@ router.post('/create-checkout-session', async (req, res) => {
                 enabled: true,
             },
             customer:customer.id,
-            line_items, // تم تمرير line_items هنا بشكل صحيح
+            line_items, 
             mode: 'payment',
             success_url: `${process.env.CLIENT_URL}/checkout-success` || 'http://localhost:5173/checkout-success',
             cancel_url: `${process.env.CLIENT_URL}/cart`,
