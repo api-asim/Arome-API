@@ -1,158 +1,91 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const Stripe = require('stripe');
-const { Order } = require('../../models/order');
-require('dotenv').config();
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY); 
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+const connectDB = require('../../db');
+const Order = require('../../models/order');
 const app = express();
-let cachedDb = null;
 
-async function connectToDatabase() {
-    
-    if (cachedDb && cachedDb.connections[0].readyState === 1) {
-        console.log('Using existing database connection for webhook');
-        return cachedDb;
-    }
-
-    if (!process.env.DB_URL) {
-        console.error('DB_URL environment variable is not set for webhook!');
-        throw new Error('DB_URL environment variable is not set!');
-    }
-
-    try {
-        console.log('Attempting new MongoDB connection for webhook...');
-        const connection = await mongoose.connect(process.env.DB_URL, {
-            bufferCommands: false, 
-            serverSelectionTimeoutMS: 15000, 
-            socketTimeoutMS: 30000, 
-            connectTimeoutMS: 30000, 
-        });
-        cachedDb = connection; 
-        console.log('New MongoDB connection established successfully for webhook.');
-        return cachedDb;
-    } catch (error) {
-        console.error('MongoDB connection error for webhook:', error);
-        cachedDb = null; 
-        throw error;
-    }
-}
-
-const createOrder = async (data) => {
-    await connectToDatabase();
-
-    let productsFromMetadata = [];
-
-    try {
-        const sessionLineItems = await stripe.checkout.sessions.listLineItems(data.id, {
-            expand: ['data.price.product'],
-        });
-
-        console.log('Stripe Line Items Response:', JSON.stringify(sessionLineItems, null, 2));
-
-        if (!sessionLineItems || !Array.isArray(sessionLineItems.data) || sessionLineItems.data.length === 0) {
-            console.error('No line items found for this session from Stripe.');
-            return; 
-        }
-
-        productsFromMetadata = sessionLineItems.data.map(item => {
-            if (!item.price) {
-                console.warn(`Line item ${item.id} is missing a price object.`);
-                return null;
-            }
-
-            const productData = item.price.product;
-
-            if (!productData) {
-                console.warn(`Product data is missing for line item: ${item.id} even after expansion. This might indicate an issue with product creation or linking in Stripe.`);
-                return null;
-            }
-
-            const productId = productData.metadata && productData.metadata.id ? productData.metadata.id : productData.id;
-
-            if (!productId) {
-                console.warn(`Unable to determine a valid product ID for line item: ${item.id}.`);
-                return null;
-            }
-
-            return {
-                id: productId,
-                name: productData.name,
-                price: item.price.unit_amount / 100,
-                image: productData.images && productData.images.length > 0 ? productData.images[0] : null,
-                cartQuantity: item.quantity,
-            };
-        }).filter(item => item !== null);
-
-        if (productsFromMetadata.length === 0) {
-            console.error('No valid products found for order after processing Stripe line items.');
-            return;
-        }
-
-    } catch (fetchParseError) {
-        console.error('Error fetching or parsing line items from Stripe:', fetchParseError.message);
-        return;
-    }
-
-    const subtotalInDollars = data.amount_subtotal / 100;
-    const totalInDollars = data.amount_total / 100;
-
-    const userId = data.metadata.userId;
-    if (!userId) {
-        console.error('Error: userId not found in session metadata for order creation.');
-        return;
-    }
-
-    const newOrder = new Order({
-        userId: userId,
-        customerId: data.customer,
-        paymentIntentId: data.payment_intent,
-        products: productsFromMetadata,
-        subtotal: subtotalInDollars,
-        total: totalInDollars,
-        shipping: data.customer_details,
-        delivery_status: 'pending', 
-        payment_status: data.payment_status,
-    });
-    try {
-        const savedOrder = await newOrder.save();
-        console.log('Processed Order successfully and saved to DB:', savedOrder);
-    } catch (saveError) {
-        console.error('Error saving order to database:', saveError);
-    }
-};
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
 app.post('/', express.raw({ type: 'application/json' }), async (req, res) => {
     const sig = req.headers['stripe-signature'];
     let event;
 
+    console.log('Stripe webhook received!');
+    console.log('Request Headers:', req.headers); 
+    console.log('Request Body (raw):', req.body ? req.body.toString().substring(0, 500) + '...' : 'Empty'); 
     try {
-        event = stripe.webhooks.constructEvent(
-            req.body,
-            sig,
-            endpointSecret
-        );
-        console.log('Stripe Webhook Event Type:', event.type); 
+        event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+        console.log('Webhook signature verified successfully.');
     } catch (err) {
-        console.error(`Webhook signature verification failed: ${err.message}`); 
+        console.error(`Webhook Error: ${err.message}`);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
-    const data = event.data.object; 
-    const eventType = event.type;  
-    if (eventType === 'checkout.session.completed') {
-        try {
-            console.log('Attempting to create order from checkout.session.completed event...');
-            await createOrder(data); 
-            console.log('createOrder function finished and likely saved data.');
-        } catch (err) {
-            console.error('Error in createOrder function called from webhook:', err.message);
-        }
-    } else {
-        //massage error
-        console.log(`Unhandled event type: ${eventType}`);
+    console.log('Stripe Webhook Event Type:', event.type); 
+    try {
+        await connectDB();
+        console.log('Database connection attempted from webhook.');
+    } catch (dbErr) {
+        console.error('Failed to connect to database from webhook:', dbErr.message);
+        return res.status(500).send('Database connection error');
     }
-    res.status(200).end();
+
+    // Handle the event
+    switch (event.type) {
+        case 'checkout.session.completed':
+            const session = event.data.object;
+
+            console.log('Attempting to create order from checkout.session.completed event...');
+            console.log('Session Data:', JSON.stringify(session, null, 2));
+            if (session.payment_status === 'paid') {
+                try {
+                    const customerEmail = session.customer_details ? session.customer_details.email : null;
+                    const shippingAddress = session.shipping_details ? session.shipping_details.address : {};
+                    const amountTotal = session.amount_total; 
+                    const currency = session.currency;
+                    const paymentIntentId = session.payment_intent;
+                    const customerId = session.customer;
+                    const newOrder = new Order({
+                        userId: customerId || 'guest', 
+                        customerEmail: customerEmail,
+                        products: [],
+                        totalAmount: amountTotal / 100, 
+                        currency: currency,
+                        paymentIntentId: paymentIntentId,
+                        shippingAddress: {
+                            street: shippingAddress.line1,
+                            city: shippingAddress.city,
+                            state: shippingAddress.state,
+                            zip: shippingAddress.postal_code,
+                            country: shippingAddress.country,
+                        },
+                        status: 'pending'
+                    });
+
+                    console.log('Order object to be saved:', JSON.stringify(newOrder, null, 2));
+
+                    const savedOrder = await newOrder.save();
+                    console.log('Processed Order successfully and saved to DB:', savedOrder);
+                } catch (error) {
+                    console.error('Error processing checkout.session.completed:', error.message);
+                    console.error('Stack:', error.stack); 
+                }
+            } else {
+                console.log('Checkout session not paid, skipping order creation.');
+            }
+            break;
+        case 'payment_intent.succeeded':
+            const paymentIntent = event.data.object;
+            console.log(`PaymentIntent for ${paymentIntent.amount} was successful!`);
+            break;
+        case 'payment_method.attached':
+            const paymentMethod = event.data.object;
+            console.log('PaymentMethod was attached to a Customer!');
+            break;
+        default:
+            console.log(`Unhandled event type ${event.type}`);
+    }
+    res.status(200).send('Webhook Received');
 });
 
 module.exports = app;
