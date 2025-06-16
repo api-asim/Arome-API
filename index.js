@@ -5,7 +5,6 @@ const cookieParser = require('cookie-parser');
 const cookieSession = require('cookie-session');
 require('dotenv').config();
 
-// 1. استيراد المسارات (بدون webhookRoutes)
 const register = require('./routes/register');
 const login = require('./routes/login');
 const authRouter = require('./routes/googleRoutes');
@@ -13,7 +12,7 @@ const productRoute = require('./routes/productRoute');
 const orderRouter = require('./routes/orderRoute');
 const usersRoute = require('./routes/userRoutes');
 const checkoutRoutes = require('./routes/checkout');
-// const webhookRoutes = require('./routes/webhook'); // <-- احذف هذا السطر
+// // const webhookRoutes = require('./routes/webhook'); // <-- احذف هذا السطر
 
 const app = express();
 
