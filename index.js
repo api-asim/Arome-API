@@ -1,10 +1,9 @@
 const express = require('express');
 const cors = require('cors');
-const mongoose = require('mongoose'); 
+const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
 const cookieSession = require('cookie-session');
 require('dotenv').config();
-
 
 const register = require('./routes/register');
 const login = require('./routes/login');
@@ -13,10 +12,11 @@ const productRoute = require('./routes/productRoute');
 const orderRouter = require('./routes/orderRoute');
 const usersRoute = require('./routes/userRoutes');
 const checkoutRoutes = require('./routes/checkout');
+// // const webhookRoutes = require('./routes/webhook'); // <-- احذف هذا السطر
 
 const app = express();
 
-let cachedDb = null; 
+let cachedDb = null;
 
 async function connectToDatabase() {
     if (cachedDb && cachedDb.connections[0].readyState === 1) {
@@ -48,7 +48,7 @@ async function connectToDatabase() {
 }
 
 app.use(async (req, res, next) => {
-    if (req.originalUrl === '/api/stripe') {
+    if (req.originalUrl === '/api/stripe/webhook') {
         return next();
     }
 
@@ -56,6 +56,7 @@ app.use(async (req, res, next) => {
         await connectToDatabase();
         next();
     } catch (error) {
+        console.error(`Failed to connect to database for ${req.originalUrl}: ${error.message}`);
         return res.status(500).json({
             message: 'Database connection issue. Please try again later.',
             error: error.message
@@ -72,8 +73,8 @@ app.use(cors({
 }));
 
 app.use((req, res, next) => {
-    if (req.originalUrl !== '/api/stripe') { 
-        console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
+    console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
+    if (req.originalUrl !== '/api/stripe/webhook') {
         console.log('Request Body:', req.body);
     }
     next();
@@ -92,7 +93,8 @@ app.use('/api/order', orderRouter);
 app.use('/api/users', usersRoute);
 app.use('/api/register', register);
 app.use('/api/login', login);
-app.use('/api/checkout-session', checkoutRoutes); 
+app.use('/api/stripe', checkoutRoutes);
+
 
 app.get('/', (req, res) => {
     res.send('Welcome to our online shop API...');
@@ -105,7 +107,6 @@ app.get('/api/order', (req, res) => { res.send('Here you can find all our orders
 app.get('/api/users', (req, res) => { res.send('Here you can find all our users...'); });
 app.get('/api/stripe', (req, res) => { res.send('Stripe payment method is valid here...'); });
 app.get('/api/auth', (req, res) => { res.send('Sign in with Google...'); });
-app.get('/api/checkout-session', (req, res) => { res.send('Create a Stripe checkout session here...'); });
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
