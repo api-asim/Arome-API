@@ -5,6 +5,7 @@ const cookieParser = require('cookie-parser');
 const cookieSession = require('cookie-session');
 require('dotenv').config();
 
+// 1. استيراد المسارات (بدون webhookRoutes)
 const register = require('./routes/register');
 const login = require('./routes/login');
 const authRouter = require('./routes/googleRoutes');
@@ -12,7 +13,7 @@ const productRoute = require('./routes/productRoute');
 const orderRouter = require('./routes/orderRoute');
 const usersRoute = require('./routes/userRoutes');
 const checkoutRoutes = require('./routes/checkout');
-const webhookRoutes = require('./routes/webhook');
+// const webhookRoutes = require('./routes/webhook'); // <-- احذف هذا السطر
 
 const app = express();
 
@@ -32,10 +33,10 @@ async function connectToDatabase() {
     try {
         console.log('Attempting new MongoDB connection...');
         const connection = await mongoose.connect(process.env.DB_URL, {
-            bufferCommands: false, 
-            serverSelectionTimeoutMS: 15000, 
-            socketTimeoutMS: 30000, 
-            connectTimeoutMS: 30000, 
+            bufferCommands: false,
+            serverSelectionTimeoutMS: 15000,
+            socketTimeoutMS: 30000,
+            connectTimeoutMS: 30000,
         });
         cachedDb = connection;
         console.log('New MongoDB connection established successfully.');
@@ -43,7 +44,7 @@ async function connectToDatabase() {
     } catch (error) {
         console.error('MongoDB connection error:', error);
         cachedDb = null;
-        throw error; 
+        throw error;
     }
 }
 
@@ -54,9 +55,8 @@ app.use(async (req, res, next) => {
 
     try {
         await connectToDatabase();
-        next(); 
+        next();
     } catch (error) {
-        
         console.error(`Failed to connect to database for ${req.originalUrl}: ${error.message}`);
         return res.status(500).json({
             message: 'Database connection issue. Please try again later.',
@@ -65,11 +65,8 @@ app.use(async (req, res, next) => {
     }
 });
 
-app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), webhookRoutes);
-
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
 
 app.use(cors({
     origin: process.env.VERCEL_LINK || 'http://localhost:5173',
@@ -86,11 +83,10 @@ app.use((req, res, next) => {
 
 app.use(cookieSession({
     name: 'session',
-    keys: [process.env.COOKIE_KEY || 'AromeSecretKey'], 
-    maxAge: 24 * 60 * 60 * 1000 
+    keys: [process.env.COOKIE_KEY || 'AromeSecretKey'],
+    maxAge: 24 * 60 * 60 * 1000
 }));
 app.use(cookieParser());
-
 
 app.use('/api/auth', authRouter);
 app.use('/api/product', productRoute);
@@ -99,6 +95,7 @@ app.use('/api/users', usersRoute);
 app.use('/api/register', register);
 app.use('/api/login', login);
 app.use('/api/stripe', checkoutRoutes);
+
 
 app.get('/', (req, res) => {
     res.send('Welcome to our online shop API...');
@@ -116,6 +113,5 @@ const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
     console.log(`Backend server is running on port ${PORT}!`);
 });
-
 
 module.exports = app;
