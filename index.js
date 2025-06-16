@@ -17,12 +17,12 @@ const webhookRoutes = require('./routes/webhook');
 
 const app = express();
 
-let isConnected = false; 
+let cachedDb = null;
 
 async function connectToDatabase() {
-    if (isConnected) {
+    if (cachedDb && cachedDb.readyState === 1) { 
         console.log('Using existing database connection');
-        return; 
+        return cachedDb;
     }
 
     if (!process.env.DB_URL) {
@@ -31,34 +31,48 @@ async function connectToDatabase() {
     }
 
     try {
-        await mongoose.connect(process.env.DB_URL, {
-            bufferCommands: false, 
+        const connection = await mongoose.connect(process.env.DB_URL, {
+            bufferCommands: false,
             bufferTimeoutMS: 30000,
             serverSelectionTimeoutMS: 15000, 
             socketTimeoutMS: 30000, 
         });
-        isConnected = true;
+        cachedDb = connection; 
         console.log('New MongoDB connection established');
+        return cachedDb;
     } catch (error) {
         console.error('MongoDB connection error:', error);
-        isConnected = false; 
+        cachedDb = null;
         throw error;
     }
 }
 
-
 app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), webhookRoutes);
 
+app.use(async (req, res, next) => {
+    if (req.originalUrl.startsWith('/api/') && req.originalUrl !== '/api/stripe/webhook') {
+        try {
+            await connectToDatabase();
+            next(); 
+        } catch (error) {
+            console.error('Error in DB connection middleware:', error);
+            return res.status(500).json({
+                message: 'Database connection issue. Please try again later.',
+                error: error.message
+            });
+        }
+    } else {
+        next();
+    }
+});
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-
 
 app.use(cors({
     origin: process.env.VERCEL_LINK || 'http://localhost:5173',
     credentials: true,
 }));
-
 
 app.use((req, res, next) => {
     console.log(`Incoming Request: ${req.method} ${req.originalUrl}`);
@@ -67,7 +81,6 @@ app.use((req, res, next) => {
     }
     next();
 });
-
 
 app.use(cookieSession({
     name: 'session',
@@ -99,13 +112,8 @@ app.get('/api/stripe', (req, res) => { res.send('Stripe payment method is valid 
 app.get('/api/auth', (req, res) => { res.send('Sign in with Google...'); });
 
 
-connectToDatabase().then(() => {
-    app.listen(process.env.PORT || 5000, () => {
-        console.log(`Backend server is running on port ${process.env.PORT || 5000}!`);
-    });
-}).catch(err => {
-    console.error("Failed to start server due to database connection error:", err);
-    process.exit(1); 
+app.listen(process.env.PORT || 5000, () => {
+    console.log(`Backend server is running on port ${process.env.PORT || 5000}!`);
 });
 
 module.exports = app;
