@@ -1,9 +1,11 @@
+// في ملف webhook.js
 const express = require('express');
 const Stripe = require('stripe');
 const { Order } = require('../models/order');
 require("dotenv").config();
 
-const stripe = Stripe(process.env.STRIPE_KEY);
+// استخدم مفتاح Test الخاص بك هنا للتأكد
+const stripe = Stripe(process.env.STRIPE_KEY || 'sk_test_51RZFD0RY03DkzGq64zcuH2MOYDDfIS1ryMJpCxxu00hgRlW6592XrNreMx9OEIfzmnzdn9EuyJZt1h9Y4USORcMF00z7AbHC3U'); // استخدم مفتاحك مباشرة للتأكد
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
 const router = express.Router();
@@ -93,18 +95,24 @@ const createOrder = async (data) => {
 
 // handler webhook
 router.post('/', express.raw({type: 'application/json'}), async (req, res) => {
-    const sig = req.headers['stripe-signature'];
+    // قم بتعليق السطر التالي:
+    // const sig = req.headers['stripe-signature'];
     let event;
 
     try {
-        event = stripe.webhooks.constructEvent(
-            req.body,
-            sig,
-            endpointSecret
-        );
-        console.log('Webhook verified.');
+        // قم بتعليق هذا السطر
+        // event = stripe.webhooks.constructEvent(
+        //     req.body,
+        //     sig,
+        //     endpointSecret
+        // );
+
+        // **استخدم هذا بدلاً منه للتجربة:**
+        event = JSON.parse(req.body.toString());
+        console.log('Webhook event received (SIGNATURE VERIFICATION SKIPPED FOR DIAGNOSIS).');
+
     } catch (err) {
-        console.log(`Webhook signature verification failed.`, err.message);
+        console.error(`Webhook Error during parsing (not signature): ${err.message}`);
         return res.status(400).send(`Webhook Error: ${err.message}`);
     }
 
@@ -113,7 +121,9 @@ router.post('/', express.raw({type: 'application/json'}), async (req, res) => {
 
     if(eventType === 'checkout.session.completed'){
         try {
+            console.log('Attempting to create order from checkout.session.completed event...');
             await createOrder(data);
+            console.log('createOrder function finished and likely saved data.');
         } catch (err) {
             console.error('Error in createOrder function called from webhook:', err.message);
         }
