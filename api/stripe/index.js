@@ -1,6 +1,6 @@
 const express = require('express');
 const Stripe = require('stripe');
-const Order = require('../../models/order');
+const Order = require('../../models/order'); 
 
 const mongoose = require('mongoose');
 require('dotenv').config();
@@ -45,12 +45,17 @@ app.post('/api/stripe', async (req, res) => {
     let event;
     let requestBody;
 
+    // قراءة الـ raw body يدوياً، هذا ضروري لـ Stripe
     const chunks = [];
     req.on('data', (chunk) => chunks.push(chunk));
     await new Promise((resolve) => req.on('end', resolve));
     requestBody = Buffer.concat(chunks);
 
     const sig = req.headers['stripe-signature'];
+
+    console.log('Stripe webhook received!');
+    console.log('Request Headers:', req.headers);
+    console.log('Request Body (raw, partial):', requestBody ? requestBody.toString().substring(0, 500) + '...' : 'Empty');
 
     try {
         event = stripe.webhooks.constructEvent(requestBody, sig, webhookSecret);
@@ -63,7 +68,7 @@ app.post('/api/stripe', async (req, res) => {
     console.log('Stripe Webhook Event Type:', event.type);
 
     try {
-        await connectToDatabase(); // استخدام دالة الاتصال المنسوخة
+        await connectToDatabase(); 
         console.log('Database connection attempted from webhook.');
     } catch (dbErr) {
         console.error('Failed to connect to database from webhook:', dbErr.message);
@@ -87,7 +92,7 @@ app.post('/api/stripe', async (req, res) => {
                     const newOrder = new Order({
                         userId: customerId || 'guest',
                         customerEmail: customerEmail,
-                        products: [],
+                        products: [], 
                         totalAmount: amountTotal / 100,
                         currency: currency,
                         paymentIntentId: paymentIntentId,
