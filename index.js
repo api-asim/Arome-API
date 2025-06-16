@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
-require('dotenv').config(); 
+require('dotenv').config();
 
 // 2. Import Routes Files
 const register = require('./routes/register');
@@ -17,12 +17,12 @@ const webhookRoutes = require('./routes/webhook');
 
 const app = express();
 
-let cachedDb = null;
+let isConnected = false; 
 
 async function connectToDatabase() {
-    if (cachedDb) {
+    if (isConnected) {
         console.log('Using existing database connection');
-        return cachedDb;
+        return; 
     }
 
     if (!process.env.DB_URL) {
@@ -31,41 +31,24 @@ async function connectToDatabase() {
     }
 
     try {
-        const connection = await mongoose.connect(process.env.DB_URL, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
-            bufferCommands: false,
+        await mongoose.connect(process.env.DB_URL, {
+            bufferCommands: false, 
             bufferTimeoutMS: 30000,
             serverSelectionTimeoutMS: 15000, 
             socketTimeoutMS: 30000, 
         });
-
-        
-        cachedDb = connection.connections[0].db;
+        isConnected = true;
         console.log('New MongoDB connection established');
-        return cachedDb;
     } catch (error) {
         console.error('MongoDB connection error:', error);
-        cachedDb = null;
+        isConnected = false; 
         throw error;
     }
 }
-app.use(async (req, res, next) => {
-    if (req.originalUrl === '/api/stripe/webhook') {
-        return next();
-    }
-    try {
-        await connectToDatabase(); 
-        next();
-    } catch (error) {
-        res.status(500).json({
-            message: 'Database connection issue. Please try again later.',
-            error: error.message
-        });
-    }
-});
 
-app.use('/api/stripe/webhook', webhookRoutes);
+
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }), webhookRoutes);
+
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -75,7 +58,6 @@ app.use(cors({
     origin: process.env.VERCEL_LINK || 'http://localhost:5173',
     credentials: true,
 }));
-
 
 
 app.use((req, res, next) => {
@@ -101,11 +83,12 @@ app.use('/api/order', orderRouter);
 app.use('/api/users', usersRoute);
 app.use('/api/register', register);
 app.use('/api/login', login);
-app.use('/api/stripe', checkoutRoutes);
+app.use('/api/stripe', checkoutRoutes); 
 
 app.get('/', (req, res) => {
     res.send('Welcome to our online shop API...');
 });
+
 
 app.get('/api/register', (req, res) => { res.send('If you want to sign up, send data here...'); });
 app.get('/api/login', (req, res) => { res.send('Send your data here to submit and sign in...'); });
@@ -114,5 +97,15 @@ app.get('/api/order', (req, res) => { res.send('Here you can find all our orders
 app.get('/api/users', (req, res) => { res.send('Here you can find all our users...'); });
 app.get('/api/stripe', (req, res) => { res.send('Stripe payment method is valid here...'); });
 app.get('/api/auth', (req, res) => { res.send('Sign in with Google...'); });
+
+
+connectToDatabase().then(() => {
+    app.listen(process.env.PORT || 5000, () => {
+        console.log(`Backend server is running on port ${process.env.PORT || 5000}!`);
+    });
+}).catch(err => {
+    console.error("Failed to start server due to database connection error:", err);
+    process.exit(1); 
+});
 
 module.exports = app;
