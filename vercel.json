@@ -8,6 +8,11 @@
   ],
   "routes": [
     {
+      "src": "/api/stripe",
+      "dest": "/api/stripe/index.js",
+      "methods": ["POST"]
+    },
+    {
       "src": "/(.*)",
       "dest": "/index.js"
     }
